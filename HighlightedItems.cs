@@ -20,6 +20,7 @@ using ExileCore2.Shared;
 using ExileCore2.Shared.Helpers;
 using ItemFilterLibrary;
 using RectangleF = ExileCore2.Shared.RectangleF;
+using Vector2 = System.Numerics.Vector2;
 
 namespace HighlightedItems;
 
@@ -33,16 +34,14 @@ public class HighlightedItems : BaseSettingsPlugin<Settings>
 
     private readonly ConditionalWeakTable<string, QueryOrException> _queries = [];
 
-    private bool MoveCancellationRequested =>
-        Settings.CancelWithRightMouseButton && (Control.MouseButtons & MouseButtons.Right) != 0;
-
+    private bool MoveCancellationRequested => Settings.CancelWithRightMouseButton && (Control.MouseButtons & MouseButtons.Right) != 0;
     private IngameState InGameState => GameController.IngameState;
     private Vector2 WindowOffset => GameController.Window.GetWindowRectangleTimeCache.TopLeft;
 
     public override bool Initialise()
     {
-        base.Initialise();
-        Name = "HighlightedItems";
+        Graphics.InitImage(Path.Combine(DirectoryFullName, "images\\pick.png").Replace('\\', '/'), false);
+        Graphics.InitImage(Path.Combine(DirectoryFullName, "images\\pickL.png").Replace('\\', '/'), false);
 
         var pickBtn = Path.Combine(DirectoryFullName, "images\\pick.png").Replace('\\', '/');
         var pickLBtn = Path.Combine(DirectoryFullName, "images\\pickL.png").Replace('\\', '/');
@@ -51,7 +50,7 @@ public class HighlightedItems : BaseSettingsPlugin<Settings>
 
         return true;
     }
-    
+
     public override void AreaChange(AreaInstance area)
     {
         _mouseStateForRect.Clear();
@@ -75,6 +74,13 @@ public class HighlightedItems : BaseSettingsPlugin<Settings>
             Predicate<Entity> returnValue = null;
             if (!string.IsNullOrWhiteSpace(filterText))
             {
+                ImGui.SameLine();
+                if (ImGui.Button("Clear"))
+                {
+                    filterText = "";
+                    return null;
+                }
+
                 if (!Settings.SavedFilters.Contains(filterText))
                 {
                     ImGui.SameLine();
@@ -178,13 +184,19 @@ public class HighlightedItems : BaseSettingsPlugin<Settings>
         {
             DebugWindow.LogMsg("Running the inventory dump procedure...");
             TaskUtils.RunOrRestart(ref _currentOperation, () => null);
-            
+            if (_itemsToMove is { Count: > 0 } itemsToMove)
+            {
+                foreach (var (rect, color) in itemsToMove.Skip(1).Select(x => (x, Settings.CustomFilterFrameColor)).Prepend((itemsToMove[0], Color.Green)))
+                {
+                    Graphics.DrawFrame(rect.TopLeft, rect.BottomRight, color, Settings.CustomFilterFrameThickness);
+                }
+            }
             if (Input.IsKeyDown(Keys.LShiftKey) && _currentOperation is null)
             {
                 DebugWindow.LogMsg($"Shift up: {_currentOperation is null}");
                 Keyboard.KeyUp(Keys.LShiftKey);
             }
-
+            
             return;
         }
 
@@ -193,7 +205,7 @@ public class HighlightedItems : BaseSettingsPlugin<Settings>
 
         var (inventory, rectElement, highlightText) =
             (InGameState.IngameUi.StashElement, InGameState.IngameUi.GuildStashElement) switch
-            {
+        {
                 ({
                     IsVisible: true, 
                     VisibleStash: { InventoryUIElement: { } invRect } visibleStash,
@@ -205,7 +217,7 @@ public class HighlightedItems : BaseSettingsPlugin<Settings>
                     Children: var children
                 }) => (visibleStash, invRect, children[3].Children[3].Children[0].Text),
                 _ => (null, null, null)
-            };
+        };
 
         const float buttonSize = 37;
         var highlightedItemsFound = false;
@@ -215,7 +227,7 @@ public class HighlightedItems : BaseSettingsPlugin<Settings>
             var isTextSet = !string.IsNullOrEmpty(highlightText);
             var stashRect = rectElement.GetClientRectCache;
             var (itemFilter, isCustomFilter) = GetPredicate("Custom stash filter", ref _customStashFilter,
-                stashRect.BottomLeft, Settings.ShowCustomStashFilterWindow) is { } customPredicate
+                stashRect.BottomLeft, Settings.ShowCustomFilterWindow) is { } customPredicate
                 ? ((Predicate<NormalInventoryItem>)(s => (!isTextSet||s.isHighlighted != Settings.InvertSelection.Value)&&customPredicate(s.Item)), true)
                 : (s => s.isHighlighted != Settings.InvertSelection.Value, false);
 
@@ -241,7 +253,7 @@ public class HighlightedItems : BaseSettingsPlugin<Settings>
                     }
                     var rect = item.GetClientRectCache;
                     Graphics.DrawFrame(rect.TopLeft, rect.BottomRight, Color.Red,
-                        Settings.CustomFilterFrameThickness+8);
+                        Settings.CustomFilterFrameThickness+5);
                 }
             }
             
@@ -251,8 +263,14 @@ public class HighlightedItems : BaseSettingsPlugin<Settings>
                 if (isCustomFilter)
                 {
                     var rect = item.GetClientRectCache;
-                    Graphics.DrawFrame(rect.TopLeft, rect.BottomRight, Settings.CustomFilterFrameColor,
-                        Settings.CustomFilterFrameThickness);
+                    var deflateFactor = Settings.CustomFilterBorderDeflation / 200.0;
+                    var deflateWidth = (int)(rect.Width * deflateFactor + Settings.CustomFilterFrameThickness / 2);
+                    var deflateHeight = (int)(rect.Height * deflateFactor + Settings.CustomFilterFrameThickness / 2);
+                    rect.Inflate(-deflateWidth, -deflateHeight);
+
+                    var topLeft = rect.TopLeft;
+                    var bottomRight = rect.BottomRight;
+                    Graphics.DrawFrame(topLeft, bottomRight, Settings.CustomFilterFrameColor, Settings.CustomFilterBorderRounding, Settings.CustomFilterFrameThickness, 0);
                 }
             }
 
@@ -289,8 +307,7 @@ public class HighlightedItems : BaseSettingsPlugin<Settings>
         {
             var inventoryRect = inventoryPanel[2].GetClientRectCache;
 
-            var (itemFilter, isCustomFilter) = GetPredicate("Custom inventory filter", ref _customInventoryFilter,
-                inventoryRect.BottomLeft, Settings.ShowCustomInventoryFilterWindow) is { } customPredicate
+            var (itemFilter, isCustomFilter) = GetPredicate("Custom inventory filter", ref _customInventoryFilter, inventoryRect.BottomLeft) is { } customPredicate
                 ? (customPredicate, true)
                 : (_ => true, false);
 
@@ -304,12 +321,10 @@ public class HighlightedItems : BaseSettingsPlugin<Settings>
 
                 if (isCustomFilter)
                 {
-                    foreach (var item in GameController.IngameState.ServerData.PlayerInventories[0].Inventory
-                                 .InventorySlotItems.Where(x => itemFilter(x.Item)))
+                    foreach (var item in GameController.IngameState.ServerData.PlayerInventories[0].Inventory.InventorySlotItems.Where(x => itemFilter(x.Item)))
                     {
                         var rect = item.GetClientRect();
-                        Graphics.DrawFrame(rect.TopLeft, rect.BottomRight, Settings.CustomFilterFrameColor,
-                            Settings.CustomFilterFrameThickness);
+                        Graphics.DrawFrame(rect.TopLeft, rect.BottomRight, Settings.CustomFilterFrameColor, Settings.CustomFilterFrameThickness);
                     }
                 }
 
@@ -320,8 +335,8 @@ public class HighlightedItems : BaseSettingsPlugin<Settings>
                     !highlightedItemsFound &&
                     Input.IsKeyDown(Settings.MoveToInventoryHotkey.Value))
                 {
-                    var inventoryItems = GameController.IngameState.ServerData.PlayerInventories[0].Inventory
-                        .InventorySlotItems
+                    var inventoryItems = GameController.IngameState.ServerData.PlayerInventories[0].Inventory.InventorySlotItems
+                        .Where(x => !IsInIgnoreCell(x))
                         .Where(x => itemFilter(x.Item))
                         .OrderBy(x => x.PosX)
                         .ThenBy(x => x.PosY)
@@ -392,33 +407,33 @@ public class HighlightedItems : BaseSettingsPlugin<Settings>
         }
 
         var prevMousePos = Mouse.GetCursorPosition();
-        foreach (var item in items)
+        for (var i = 0; i < items.Count; i++)
         {
+            var item = items[i];
+            _itemsToMove = items[i..].Select(x => x.GetClientRect()).ToList();
             if (MoveCancellationRequested)
             {
+                _itemsToMove = null;
                 return false;
             }
 
-            if (!CheckIgnoreCells(item))
+            if (!InGameState.IngameUi.InventoryPanel.IsVisible)
             {
-                if (!InGameState.IngameUi.InventoryPanel.IsVisible)
-                {
-                    DebugWindow.LogMsg("HighlightedItems: Inventory Panel closed, aborting loop");
-                    break;
-                }
-
-                if (!IsStashTargetOpened)
-                {
-                    DebugWindow.LogMsg("HighlightedItems: Target inventory closed, aborting loop");
-                    break;
-                }
-
-                await MoveItem(item.GetClientRect().Center);
+                DebugWindow.LogMsg("HighlightedItems: Inventory Panel closed, aborting loop");
+                break;
             }
+
+            if (!IsStashTargetOpened)
+            {
+                DebugWindow.LogMsg("HighlightedItems: Target inventory closed, aborting loop");
+                break;
+            }
+
+            await MoveItem(item.GetClientRect().Center);
         }
 
         Mouse.moveMouse(prevMousePos);
-        await Wait(MouseMoveDelay, true);
+        _itemsToMove = null;
         return true;
     }
 
@@ -437,7 +452,9 @@ public class HighlightedItems : BaseSettingsPlugin<Settings>
         || InGameState.IngameUi.StashElement.IsVisible
         || InGameState.IngameUi.GuildStashElement.IsVisible;
 
-    private async SyncTask<bool> MoveItemsToInventory(IList<NormalInventoryItem> items)
+    private List<RectangleF> _itemsToMove = null;
+
+    private async SyncTask<bool> MoveItemsToInventory(List<NormalInventoryItem> items)
     {
         if (!await MoveItemsCommonPreamble())
         {
@@ -445,10 +462,13 @@ public class HighlightedItems : BaseSettingsPlugin<Settings>
         }
 
         var prevMousePos = Mouse.GetCursorPosition();
-        foreach (var item in items)
+        for (var i = 0; i < items.Count; i++)
         {
+            var item = items[i];
+            _itemsToMove = items[i..].Select(x => x.GetClientRectCache).ToList();
             if (MoveCancellationRequested)
             {
+                _itemsToMove = null;
                 return false;
             }
 
@@ -474,7 +494,7 @@ public class HighlightedItems : BaseSettingsPlugin<Settings>
         }
 
         Mouse.moveMouse(prevMousePos);
-        await Wait(MouseMoveDelay, true);
+        _itemsToMove = null;
         return true;
     }
 
@@ -579,7 +599,9 @@ public class HighlightedItems : BaseSettingsPlugin<Settings>
 
         return true;
     }
+
     private readonly ConcurrentDictionary<RectangleF, bool?> _mouseStateForRect = [];
+
     private bool IsButtonPressed(RectangleF buttonRect)
     {
         var prevState = _mouseStateForRect.GetValueOrDefault(buttonRect);
@@ -604,7 +626,7 @@ public class HighlightedItems : BaseSettingsPlugin<Settings>
 
     private bool CanClickButtons => !Settings.VerifyButtonIsNotObstructed || !ImGui.GetIO().WantCaptureMouse;
 
-    private bool CheckIgnoreCells(ServerInventory.InventSlotItem inventItem)
+    private bool IsInIgnoreCell(ServerInventory.InventSlotItem inventItem)
     {
         var inventPosX = inventItem.PosX;
         var inventPosY = inventItem.PosY;
@@ -619,14 +641,12 @@ public class HighlightedItems : BaseSettingsPlugin<Settings>
 
     private void DrawIgnoredCellsSettings()
     {
-        ImGui.BeginChild("##IgnoredCellsMain", new Vector2(ImGui.GetContentRegionAvail().X, 204f),
-            ImGuiChildFlags.Border,
+        ImGui.BeginChild("##IgnoredCellsMain", new Vector2(ImGui.GetContentRegionAvail().X, 204f), ImGuiChildFlags.Border,
             ImGuiWindowFlags.NoScrollWithMouse);
         ImGui.Text("Ignored Inventory Slots (checked = ignored)");
 
         var contentRegionAvail = ImGui.GetContentRegionAvail();
-        ImGui.BeginChild("##IgnoredCellsCels", new Vector2(contentRegionAvail.X, contentRegionAvail.Y),
-            ImGuiChildFlags.Border,
+        ImGui.BeginChild("##IgnoredCellsCels", new Vector2(contentRegionAvail.X, contentRegionAvail.Y), ImGuiChildFlags.Border,
             ImGuiWindowFlags.NoScrollWithMouse);
 
         for (int y = 0; y < 5; ++y)

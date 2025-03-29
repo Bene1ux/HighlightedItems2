@@ -24,15 +24,15 @@
   </ItemGroup>
   <ItemGroup>
     <Reference Include="ExileCore2">
-      <HintPath>..\..\Desktop\Fg2\ExileCore2.dll</HintPath>
+      <HintPath>$(exilecore2package)\ExileCore2.dll</HintPath>
       <Private>False</Private>
     </Reference>
     <Reference Include="GameOffsets2">
-      <HintPath>..\..\Desktop\Fg2\GameOffsets2.dll</HintPath>
+      <HintPath>$(exilecore2package)\GameOffsets2.dll</HintPath>
       <Private>False</Private>
     </Reference>
     <Reference Include="ItemFilterLibrary">
-      <HintPath>..\..\Desktop\Fg2\ItemFilterLibrary.dll</HintPath>
+      <HintPath>$(exilecore2package)\ItemFilterLibrary.dll</HintPath>
       <Private>False</Private>
     </Reference>
   </ItemGroup>

@@ -10,14 +10,7 @@ namespace HighlightedItems;
 
 public class Settings : ISettings
 {
-    public bool[,] IgnoredCells { get; set; } = new bool[5, 12]
-    {
-        { false, false, false, false, false, false, false, false, false, false, false, false },
-        { false, false, false, false, false, false, false, false, false, false, false, false },
-        { false, false, false, false, false, false, false, false, false, false, false, false },
-        { false, false, false, false, false, false, false, false, false, false, false, false },
-        { false, false, false, false, false, false, false, false, false, false, false, false }
-    };
+    public bool[,] IgnoredCells { get; set; } = new bool[5, 12];
 
     public ToggleNode Enable { get; set; } = new(true);
 
@@ -33,11 +26,13 @@ public class Settings : ISettings
     public ToggleNode UseMoveToInventoryAsMoveToStashWhenNoHighlights { get; set; } = new(false);
     public HotkeyNode MoveToStashHotkey { get; set; } = new(Keys.None);
     public ToggleNode InvertSelection { get; set; } = new(false);
-    public ToggleNode ShowCustomStashFilterWindow { get; set; } = new(true);
-    public ToggleNode ShowCustomInventoryFilterWindow { get; set; } = new(true);
+    public ToggleNode ShowCustomFilterWindow { get; set; } = new(true);
     public ToggleNode ResetCustomFilterOnPanelClose { get; set; } = new(true);
+    public ToggleNode UsePopupForFilterSelector { get; set; } = new(false);
     public RangeNode<int> CustomFilterFrameThickness { get; set; } = new(2, 1, 20);
     public ColorNode CustomFilterFrameColor { get; set; } = new(Color.Violet);
+    public RangeNode<float> CustomFilterBorderRounding { get; set; } = new(0, 0, 25);
+    public RangeNode<int> CustomFilterBorderDeflation { get; set; } = new(8, 0, 100);
 
     public RangeNode<int> ExtraDelay { get; set; } = new(20, 0, 100);
 
