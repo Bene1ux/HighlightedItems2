@@ -227,7 +227,7 @@ public class HighlightedItems : BaseSettingsPlugin<Settings>
             var isTextSet = !string.IsNullOrEmpty(highlightText);
             var stashRect = rectElement.GetClientRectCache;
             var (itemFilter, isCustomFilter) = GetPredicate("Custom stash filter", ref _customStashFilter,
-                stashRect.BottomLeft, Settings.ShowCustomFilterWindow) is { } customPredicate
+                stashRect.BottomLeft, Settings.ShowCustomStashFilterWindow) is { } customPredicate
                 ? ((Predicate<NormalInventoryItem>)(s => (!isTextSet||s.isHighlighted != Settings.InvertSelection.Value)&&customPredicate(s.Item)), true)
                 : (s => s.isHighlighted != Settings.InvertSelection.Value, false);
 
@@ -307,7 +307,7 @@ public class HighlightedItems : BaseSettingsPlugin<Settings>
         {
             var inventoryRect = inventoryPanel[2].GetClientRectCache;
 
-            var (itemFilter, isCustomFilter) = GetPredicate("Custom inventory filter", ref _customInventoryFilter, inventoryRect.BottomLeft) is { } customPredicate
+            var (itemFilter, isCustomFilter) = GetPredicate("Custom inventory filter", ref _customInventoryFilter, inventoryRect.BottomLeft, Settings.ShowCustomInventoryFilterWindow) is { } customPredicate
                 ? (customPredicate, true)
                 : (_ => true, false);
 
